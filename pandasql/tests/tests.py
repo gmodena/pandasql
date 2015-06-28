@@ -7,6 +7,8 @@ import unittest
 class PandaSQLTest(unittest.TestCase):
 
     def setUp(self):
+        self.engine_conf = {} # {'drivername': 'sqlite', 'database': ''}
+        self.if_exists = None
         return
 
     def test_select(self):
@@ -14,7 +16,11 @@ class PandaSQLTest(unittest.TestCase):
                  "letter_pos": [i for i in range(len(string.ascii_letters))],
                  "l2": list(string.ascii_letters)
         })
-        result = sqldf("select * from df LIMIT 10;", locals())
+        result = sqldf(
+            "select * from df LIMIT 10;",
+            locals(),
+            if_exists=self.if_exists,
+            engine_conf=self.engine_conf)
         self.assertEqual(len(result), 10)
 
     def test_join(self):
@@ -28,9 +34,13 @@ class PandaSQLTest(unittest.TestCase):
             "letter_pos": [i for i in range(len(string.ascii_letters))],
             "letter": list(string.ascii_letters)
         })
-
-        result = sqldf("SELECT a.*, b.letter FROM df a INNER JOIN df2 b ON a.l2 = b.letter \
-             LIMIT 20;", locals())
+        q = "SELECT a.*, b.letter FROM df a INNER JOIN df2 b ON a.l2 = b.letter \
+             LIMIT 20;"
+        result = sqldf(
+            q,
+            locals(),
+            if_exists=self.if_exists,
+            engine_conf=self.engine_conf)
         self.assertEqual(len(result), 20)
 
     def test_query_with_spacing(self):
@@ -44,8 +54,13 @@ class PandaSQLTest(unittest.TestCase):
             "letter_pos": [i for i in range(len(string.ascii_letters))],
             "letter": list(string.ascii_letters)
         })
-        result = sqldf("SELECT a.*, b.letter FROM df a INNER JOIN df2 b ON a.l2 = b.letter \
-            LIMIT 20;", locals())
+        q = "SELECT a.*, b.letter FROM df a INNER JOIN df2 b ON a.l2 = b.letter \
+            LIMIT 20;"
+        result = sqldf(
+            q,
+            locals(),
+            if_exists=self.if_exists,
+            engine_conf=self.engine_conf)
         self.assertEqual(len(result), 20)
 
         q = """
@@ -58,14 +73,22 @@ class PandaSQLTest(unittest.TestCase):
         on a.l2 = b.letter
         LIMIT 20
         ;"""
-        result = sqldf(q, locals())
+        result = sqldf(
+            q,
+            locals(),
+            if_exists=self.if_exists,
+            engine_conf=self.engine_conf)
         self.assertEqual(len(result), 20)
 
     def test_query_single_list(self):
 
         mylist = [i for i in range(10)]
 
-        result = sqldf("SELECT * FROM mylist", locals())
+        result = sqldf(
+            "SELECT * FROM mylist",
+            locals(),
+            if_exists=self.if_exists,
+            engine_conf=self.engine_conf)
         self.assertEqual(len(result), 10)
 
     def test_query_list_of_lists(self):
@@ -79,13 +102,21 @@ class PandaSQLTest(unittest.TestCase):
 
         mylist = [tuple([i for i in range(10)]), tuple([i for i in range(10)])]
 
-        result = sqldf("SELECT * FROM mylist", locals())
+        result = sqldf(
+            "SELECT * FROM mylist",
+            locals(),
+            if_exists=self.if_exists,
+            engine_conf=self.engine_conf)
         self.assertEqual(len(result), 2)
 
     def test_subquery(self):
         kermit = pd.DataFrame({"x": range(10)})
         q = "select * from (select * from kermit) tbl limit 2;"
-        result = sqldf(q, locals())
+        result = sqldf(
+            q,
+            locals(),
+            if_exists=self.if_exists,
+            engine_conf=self.engine_conf)
         self.assertEqual(len(result), 2)
 
     def test_in(self):
@@ -96,7 +127,11 @@ class PandaSQLTest(unittest.TestCase):
         }
         course_df = pd.DataFrame(courseData)
         q = "SELECT * FROM course_df WHERE courseCode IN ( 'TM351', 'TU100' );"
-        result = sqldf(q, locals())
+        result = sqldf(
+            q,
+            locals(),
+            if_exists=self.if_exists,
+            engine_conf=self.engine_conf)
         self.assertEqual(len(result), 2)
 
     def test_in_with_subquery(self):
@@ -132,21 +167,33 @@ class PandaSQLTest(unittest.TestCase):
             SELECT * FROM course_df WHERE courseCode IN (
                 SELECT DISTINCT courseCode FROM program_df ) ;
           '''
-        result = sqldf(q, locals())
+        result = sqldf(
+            q,
+            locals(),
+            if_exists=self.if_exists,
+            engine_conf=self.engine_conf)
         self.assertEqual(len(result), 3)
 
     def test_datetime_query(self):
         # Unused:
         # pysqldf = lambda q: sqldf(q, globals())
         meat = load_meat()
-        result = sqldf("SELECT * FROM meat LIMIT 10;", locals())
+        result = sqldf(
+            "SELECT * FROM meat LIMIT 10;",
+            locals(),
+            if_exists=self.if_exists,
+            engine_conf=self.engine_conf)
         self.assertEqual(len(result), 10)
 
     def test_returning_none(self):
         # Unused:
         # pysqldf = lambda q: sqldf(q, globals())
         meat = load_meat()
-        result = sqldf("SELECT beef FROM meat LIMIT 10;", locals())
+        result = sqldf(
+            "SELECT beef FROM meat LIMIT 10;",
+            locals(),
+            if_exists=self.if_exists,
+            engine_conf=self.engine_conf)
         self.assertEqual(len(result), 10)
 
 

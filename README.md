@@ -1,19 +1,25 @@
 pandasql
 ========
 
+This is a fork of `pandasql` that uses SQLAlchemy (http://www.sqlalchemy.org) to handle database connections. Backward compatibility to the old dbapi backend is provided, both for in memory and on disk persistence.
+
 `pandasql` allows you to query `pandas` DataFrames using SQL syntax. It works 
 similarly to `sqldf` in R. `pandasql` seeks to provide a more familiar way of 
 manipulating and cleaning data for people new to Python or `pandas`.
 
+With SQLAlchemy `pandasql` can use a variety of backends to offload computation to. A use case for this would be working with data that does not fit in memory, or queries that produce (intermediate) result sets that do not fit in memory.
+
 #### Installation
 ```
-$ pip install -U pandasql
+$ pip install -U git+https://github.com/gmodena/pandasql@sqlalchemy
 ```
 
 #### Basics
-The main function used in pandasql is `sqldf`. `sqldf` accepts 2 parametrs
+The main function used in pandasql is `sqldf`. `sqldf` accepts 4 parametrs
    - a sql query string
    - an set of session/environment variables (`locals()` or `globals()`)
+   - what to do if a table with the same name as the dataframe already exists in the database
+   -  create a sqlalchemy Engine object to handle a database connection (eg. disk persistence)
 
 Specifying `locals()` or `globals()` can get tedious. You can defined a short 
 helper function to fix this.
@@ -22,7 +28,7 @@ helper function to fix this.
     pysqldf = lambda q: sqldf(q, globals())
 
 #### Querying
-`pandasql` uses [SQLite syntax](http://www.sqlite.org/lang.html). Any `pandas` 
+By default `pandasql` uses [SQLite syntax](http://www.sqlite.org/lang.html). Any `pandas` 
 dataframes will be automatically detected by `pandasql`. You can query them as 
 you would any regular SQL table.
 
@@ -79,6 +85,25 @@ joins and aggregations are also supported
 More information and code samples available in the [examples](https://github.com/yhat/pandasql/blob/master/examples/demo.py)
  folder or on [our blog](http://blog.yhathq.com/posts/pandasql-sql-for-pandas-dataframes.html).
 
+#### SQLAlchemy
+The `engine_conf` parameter to `sqldf` is a dict whose keys are used to create a SQLAlchemy connection uri. The naming convention follows the parameter names of `sqlalchemy.engine.url.URL`.
+
+For instance, to connect to postresql
+```
+>>> engine_conf = {'drivername': 'postgresql', 'username': 'postgres', 'password': 'password', 'host':'192.168.59.103', 'port':'5432', 'database': 'postgres'}
+>>> pysqldf = lambda q: sqldf(q, globals(), engine_conf=engine_conf)
+```
+
+Similarly, for sqlite
+```
+>>> engine_conf = {'drivername': 'sqlite', 'database': '.pandasql.db'}
+>>> pysqldf = lambda q: sqldf(q, globals(), engine_conf=engine_conf)
+```
 
 
-[![Analytics](https://ga-beacon.appspot.com/UA-46996803-1/pandasql/README.md)](https://github.com/yhat/pandasql)    
+More information and code samples available in the [examples](https://github.com/yhat/pandasql/blob/master/examples/demo.py)
+ folder or on [our blog](http://blog.yhathq.com/posts/pandasql-sql-for-pandas-dataframes.html).
+
+
+
+[![Analytics](https://ga-beacon.appspot.com/UA-46996803-1/pandasql/README.md)](https://github.com/yhat/pandasql)

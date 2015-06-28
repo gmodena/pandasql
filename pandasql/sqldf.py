@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from pandas.io.sql import to_sql, read_sql
 import re
-import os
+import os,sys
 
 
 def _ensure_data_frame(obj, name):
@@ -53,19 +53,56 @@ def _extract_table_names(q):
     return list(set(tables))
 
 
-def _write_table(tablename, df, conn):
-    "writes a dataframe to the sqlite database"
+def _write_table(tablename, df, conn, flavor='sqlite', if_exists='fail'):
+    "writes a dataframe to the sqlite database."
 
-    for col in df.columns:
-        if re.search("[() ]", col):
-            msg = "please follow SQLite column naming conventions: "
-            msg += "http://www.sqlite.org/lang_keywords.html"
-            raise Exception(msg)
+    if flavor == 'sqlite':
+        for col in df.columns:
+            if re.search("[() ]", col):
+                msg = "please follow SQLite column naming conventions: "
+                msg += "http://www.sqlite.org/lang_keywords.html"
+                raise Exception(msg)
 
-    to_sql(df, name=tablename, con=conn, flavor='sqlite')
+    to_sql(df, name=tablename, con=conn, flavor=flavor, if_exists=if_exists)
 
 
-def sqldf(q, env, inmemory=True):
+def _make_connection(inmemory, engine_conf):
+    sqlite_detect_types = sqlite.PARSE_DECLTYPES | sqlite.PARSE_COLNAMES
+    if engine_conf:
+        try:
+            from sqlalchemy import create_engine
+            from sqlalchemy.engine.url import URL
+        except ImportError:
+            raise Exception(
+                'An engine_conf has been specified, \
+                but sqlalchemy is not installed.')
+            sys.exit(1)
+
+        engine_uri = URL(**engine_conf)
+
+        connect_args = {}
+        if engine_conf['drivername'] == 'sqlite':
+            connect_args['detect_types'] = sqlite_detect_types
+        flavor = engine_conf['drivername']
+        dbname = engine_conf['database']
+        try:
+            engine = create_engine(engine_uri, connect_args=connect_args)
+        except ImportError as e:
+            print "ImportError: {0}".format(e)
+            sys.exit(1)
+    else:
+        # Fallback to sqlite + dbapi
+        flavor = 'sqlite'
+        if inmemory:
+            dbname = ":memory:"
+        else:
+            dbname = ".pandasql.db"
+        engine = sqlite.connect(dbname, detect_types=sqlite_detect_types)
+
+    return engine, flavor, dbname
+
+
+def sqldf(q, env, inmemory=True, if_exists=None, engine_conf=None):
     """
     query pandas data frames using sql syntax
 
@@ -78,7 +115,17 @@ def sqldf(q, env, inmemory=True):
         allows sqldf to access the variables in your python environment
     dbtype: bool
         memory/disk; default is in memory; if not memory then it will
-        be temporarily persisted to disk
+        be temporarily persisted to disk. Ignored if engine_conf is non null
+    if_exists: string
+        what to do if a table with the same name as the dataframe already
+        exists; see:
+        http://pandas.pydata.org/pandas-docs/dev/generated/pandas.DataFrame.to_sql.html
+        if connecting sqlite (in memory or on disk), if_exists will be set to
+        'replace'; for other dialects, it will be set to 'fail'.
+    engine_conf: dictionary
+        parameters for instantiating sqlalchemy.engine.url.URL; it allows
+        pandasql to create a sqlalchemy Engine object to handle a database
+        connection
 
     Returns
     -------
@@ -98,32 +145,44 @@ def sqldf(q, env, inmemory=True):
     >>> sqldf("select avg(x) from df;", locals())
     """
 
-    if inmemory:
-        dbname = ":memory:"
-    else:
-        dbname = ".pandasql.db"
-    # conn = sqlite.connect(dbname, detect_types=sqlite.PARSE_DECLTYPES)
-    conn = sqlite.connect(
-        dbname, detect_types=sqlite.PARSE_DECLTYPES | sqlite.PARSE_COLNAMES)
+    engine, flavor, dbname = _make_connection(inmemory, engine_conf)
+
+    # how to handle existing tables
+    if not if_exists:
+        if flavor == 'sqlite':
+            # if_exists is set to 'replace' to keep behaviour
+            # consistent with previous versions of the module
+            if_exists = 'replace'
+        else:
+            # be conservative and don't allow tables to be overwritten
+            if_exists = 'fail'
+
     tables = _extract_table_names(q)
     for table in tables:
         if table not in env:
-            conn.close()
-            if not inmemory:
+            if isinstance(engine, sqlite.Connection):
+                engine.close()
+            else:
+                engine.dispose()
+            if not inmemory and flavor == 'sqlite':
                 os.remove(dbname)
             raise Exception("%s not found" % table)
         df = env[table]
         df = _ensure_data_frame(df, table)
-        _write_table(table, df, conn)
+        _write_table(
+            table, df, conn=engine, flavor=flavor, if_exists=if_exists)
 
     try:
-        result = read_sql(q, conn, index_col=None)
+        result = read_sql(q, engine, index_col=None)
         if 'index' in result:
             del result['index']
     except Exception:
         result = None
     finally:
-        conn.close()
-        if not inmemory:
+        if isinstance(engine, sqlite.Connection):
+            engine.close()
+        else:
+            engine.dispose()
+        if not inmemory and flavor == 'sqlite':
             os.remove(dbname)
     return result
